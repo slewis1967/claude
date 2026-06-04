@@ -13,16 +13,20 @@ export interface AgentMetric {
 
 export type FleetMetrics = Record<AgentId, AgentMetric>;
 
+// Deterministic seed so server-rendered and client-hydrated markup match
+// (no hydration mismatch). Randomized drift only kicks in after mount.
 function seedMetrics(): FleetMetrics {
   const out = {} as FleetMetrics;
   for (const a of AGENTS) {
+    const base = a.baseline.load;
     out[a.id] = {
-      load: a.baseline.load,
+      load: base,
       latencyMs: a.baseline.latencyMs,
       successRate: a.baseline.successRate,
-      tasksDone: Math.floor(Math.random() * 4000) + 800,
-      history: Array.from({ length: 32 }, () =>
-        Math.max(4, a.baseline.load + (Math.random() - 0.5) * 24),
+      tasksDone: 1000 + a.baseline.latencyMs * 3,
+      // A smooth sine wave around the baseline — stable across SSR/CSR.
+      history: Array.from({ length: 32 }, (_, i) =>
+        Math.max(4, base + Math.sin(i / 3) * 10),
       ),
     };
   }

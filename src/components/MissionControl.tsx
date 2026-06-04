@@ -26,7 +26,7 @@ export default function MissionControl({
   onOpen: (s: Section) => void;
 }) {
   const { stats } = useSystemStats();
-  const clock = useClock();
+  const { clock, greeting } = useClock();
 
   const fleetLoad = useMemo(() => {
     const vals = AGENTS.map((a) => metrics[a.id].load);
@@ -53,7 +53,7 @@ export default function MissionControl({
             animate={{ opacity: 1 }}
             className="text-xs uppercase tracking-[0.3em] text-white/40"
           >
-            {greeting()} · {clock}
+            {greeting} · {clock}
           </motion.p>
           <motion.h1
             initial={{ opacity: 0, y: 10 }}
@@ -393,28 +393,33 @@ function InfoPill({ icon, label }: { icon: React.ReactNode; label: string }) {
   );
 }
 
-function greeting() {
-  const h = new Date().getHours();
+function greetingFor(h: number) {
   if (h < 5) return "Burning the midnight oil";
   if (h < 12) return "Good morning";
   if (h < 18) return "Good afternoon";
   return "Good evening";
 }
 
+// Time-dependent strings are computed only after mount so server and client
+// markup match (no hydration mismatch); they start blank and fill in on load.
 function useClock() {
-  const [now, setNow] = useState("");
+  const [clock, setClock] = useState("");
+  const [greeting, setGreeting] = useState("");
   useEffect(() => {
-    const tick = () =>
-      setNow(
-        new Date().toLocaleTimeString([], {
+    const tick = () => {
+      const d = new Date();
+      setClock(
+        d.toLocaleTimeString([], {
           hour: "2-digit",
           minute: "2-digit",
           second: "2-digit",
         }),
       );
+      setGreeting(greetingFor(d.getHours()));
+    };
     tick();
     const t = setInterval(tick, 1000);
     return () => clearInterval(t);
   }, []);
-  return now;
+  return { clock, greeting };
 }
