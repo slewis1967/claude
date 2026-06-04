@@ -16,6 +16,7 @@ import { useSystemStats } from "@/hooks/useSystemStats";
 import type { FleetMetrics } from "@/hooks/useFleetMetrics";
 import { formatBytes, formatUptime } from "@/lib/format";
 import { AnimatedNumber, GlassCard, RadialGauge, Sparkline } from "./widgets";
+import { Avatar, AgentLogo } from "./logos";
 import type { Section } from "./Sidebar";
 
 export default function MissionControl({
@@ -218,16 +219,12 @@ function FleetAgentCard({
       <button onClick={onOpen} className="w-full text-left">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
-            <div
-              className="flex h-11 w-11 items-center justify-center rounded-2xl text-xl"
-              style={{
-                background: `${agent.accent}22`,
-                color: agent.accent,
-                boxShadow: `0 0 24px -8px ${agent.accent}`,
-              }}
-            >
-              {agent.glyph}
-            </div>
+            <Avatar
+              id={agent.id}
+              accent={agent.accent}
+              accentSoft={agent.accentSoft}
+              size={44}
+            />
             <div>
               <div className="flex items-center gap-2 font-semibold">
                 {agent.name}
@@ -330,10 +327,10 @@ function ActivityStream({ metrics }: { metrics: FleetMetrics }) {
               className="flex items-center gap-3 rounded-xl px-2 py-2"
             >
               <span
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-sm"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg p-1.5"
                 style={{ background: `${agent.accent}1f`, color: agent.accent }}
               >
-                {agent.glyph}
+                <AgentLogo id={agent.id} className="h-full w-full" />
               </span>
               <div className="min-w-0 flex-1">
                 <div className="truncate text-xs">

@@ -1,8 +1,9 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { LayoutGrid, Activity } from "lucide-react";
+import { LayoutGrid } from "lucide-react";
 import { AGENTS } from "@/lib/agents";
+import { Avatar } from "./logos";
 
 export type Section = "mission" | (typeof AGENTS)[number]["id"];
 
@@ -14,126 +15,124 @@ interface Props {
 
 export default function Sidebar({ active, onSelect, agentStatus }: Props) {
   return (
-    <aside className="relative z-20 flex w-[88px] shrink-0 flex-col items-center gap-2 py-6 lg:w-[260px] lg:items-stretch lg:px-4">
+    <aside className="z-20 flex w-[76px] shrink-0 flex-col border-r border-white/[0.06] bg-white/[0.015] py-4 md:w-[290px]">
       {/* Brand */}
-      <div className="mb-6 flex items-center gap-3 px-2 lg:px-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-plasma-deep via-plasma to-flux text-2xl shadow-glow">
+      <div className="flex items-center gap-3 px-3 pb-4 md:px-5">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-plasma-deep via-plasma to-flux text-xl shadow-glow">
           ✦
         </div>
-        <div className="hidden lg:block">
-          <div className="text-sm font-bold tracking-[0.2em] text-gradient">
-            NEXUS OS
+        <div className="hidden md:block">
+          <div className="text-[15px] font-bold leading-tight tracking-tight">
+            Nexus OS
           </div>
-          <div className="text-[10px] uppercase tracking-widest text-white/40">
-            mission control
-          </div>
+          <div className="text-[11px] text-white/40">Agent control</div>
         </div>
       </div>
 
-      <NavButton
-        icon={<LayoutGrid size={20} />}
-        label="Mission Control"
-        sub="fleet overview"
-        active={active === "mission"}
-        accent="#7c5cff"
-        onClick={() => onSelect("mission")}
-      />
+      <div className="mx-3 mb-3 h-px bg-white/[0.06] md:mx-4" />
 
-      <div className="my-3 hidden px-3 text-[10px] uppercase tracking-widest text-white/30 lg:block">
-        Agents
+      {/* Overview */}
+      <div className="px-2 md:px-3">
+        <Row
+          active={active === "mission"}
+          accent="#7c5cff"
+          onClick={() => onSelect("mission")}
+          leading={
+            <span
+              className="flex h-10 w-10 items-center justify-center rounded-2xl"
+              style={{ background: "rgba(124,92,255,0.16)", color: "#a78bff" }}
+            >
+              <LayoutGrid size={18} />
+            </span>
+          }
+          title="Mission Control"
+          subtitle="Fleet overview"
+        />
       </div>
 
-      <div className="flex flex-1 flex-col gap-2">
+      <div className="px-5 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wider text-white/30 md:block">
+        <span className="hidden md:inline">Agents</span>
+      </div>
+
+      {/* Agent contacts */}
+      <nav className="flex-1 space-y-0.5 overflow-y-auto px-2 md:px-3">
         {AGENTS.map((a) => (
-          <NavButton
+          <Row
             key={a.id}
-            icon={<span className="text-lg leading-none">{a.glyph}</span>}
-            label={a.name}
-            sub={a.live ? "live bridge" : a.model}
             active={active === a.id}
             accent={a.accent}
-            online={agentStatus[a.id]}
-            live={a.live}
             onClick={() => onSelect(a.id)}
+            leading={
+              <Avatar
+                id={a.id}
+                accent={a.accent}
+                accentSoft={a.accentSoft}
+                size={40}
+                online={agentStatus[a.id] ?? true}
+              />
+            }
+            title={a.name}
+            subtitle={a.live ? a.status : a.tagline}
+            live={a.live}
           />
         ))}
-      </div>
+      </nav>
 
-      <div className="mt-auto hidden items-center gap-2 rounded-xl border border-white/5 bg-white/[0.02] px-3 py-2.5 lg:flex">
-        <Activity size={14} className="text-lime" />
-        <span className="text-[11px] text-white/50">
-          All systems nominal
+      {/* Footer status */}
+      <div className="mx-3 mt-2 hidden items-center gap-2.5 rounded-2xl border border-white/[0.06] bg-white/[0.02] px-3 py-2.5 md:flex">
+        <span className="relative flex h-2 w-2">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
         </span>
+        <span className="text-[11px] text-white/50">All systems nominal</span>
       </div>
     </aside>
   );
 }
 
-function NavButton({
-  icon,
-  label,
-  sub,
+function Row({
   active,
   accent,
-  online,
-  live,
   onClick,
+  leading,
+  title,
+  subtitle,
+  live,
 }: {
-  icon: React.ReactNode;
-  label: string;
-  sub?: string;
   active: boolean;
   accent: string;
-  online?: boolean;
-  live?: boolean;
   onClick: () => void;
+  leading: React.ReactNode;
+  title: string;
+  subtitle: string;
+  live?: boolean;
 }) {
   return (
     <button
       onClick={onClick}
-      className="group relative flex items-center gap-3 rounded-2xl px-2 py-3 transition-colors lg:px-3"
-      style={{ color: active ? "#fff" : "rgba(255,255,255,0.55)" }}
+      className="group relative flex w-full items-center gap-3 rounded-2xl px-2 py-2 text-left transition-colors hover:bg-white/[0.04] md:px-2.5"
     >
       {active && (
         <motion.div
-          layoutId="nav-active"
-          className="absolute inset-0 rounded-2xl border"
-          style={{
-            borderColor: `${accent}55`,
-            background: `linear-gradient(120deg, ${accent}22, transparent)`,
-            boxShadow: `0 0 30px -8px ${accent}88`,
-          }}
-          transition={{ type: "spring", stiffness: 380, damping: 32 }}
+          layoutId="contact-active"
+          className="absolute inset-0 rounded-2xl"
+          style={{ background: `${accent}1a`, border: `1px solid ${accent}33` }}
+          transition={{ type: "spring", stiffness: 400, damping: 34 }}
         />
       )}
-      <span
-        className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-transform group-hover:scale-110"
-        style={{
-          background: active ? `${accent}22` : "rgba(255,255,255,0.04)",
-          color: active ? accent : "currentColor",
-        }}
-      >
-        {icon}
-      </span>
-      <span className="relative hidden min-w-0 flex-1 text-left lg:block">
-        <span className="flex items-center gap-1.5 text-sm font-semibold">
-          {label}
+      <span className="relative">{leading}</span>
+      <span className="relative hidden min-w-0 flex-1 md:block">
+        <span className="flex items-center gap-1.5">
+          <span className="truncate text-sm font-semibold text-white/90">
+            {title}
+          </span>
           {live && (
-            <span
-              className="inline-block h-1.5 w-1.5 rounded-full"
-              style={{
-                background: online === false ? "#ff6b9d" : "#9eff5a",
-                boxShadow:
-                  online === false ? "0 0 8px #ff6b9d" : "0 0 8px #9eff5a",
-              }}
-            />
+            <span className="rounded-md bg-emerald-400/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-300">
+              Live
+            </span>
           )}
         </span>
-        {sub && (
-          <span className="block truncate text-[11px] text-white/35">
-            {sub}
-          </span>
-        )}
+        <span className="block truncate text-xs text-white/40">{subtitle}</span>
       </span>
     </button>
   );
