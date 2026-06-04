@@ -1,10 +1,11 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowUp, Plus, Square, Wrench, Zap, Clock } from "lucide-react";
+import { ArrowUp, Mic, Plus, Square, Wrench, Zap, Clock } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useClaudeStream, type ChatMessage } from "@/hooks/useClaudeStream";
 import { useAgentChat } from "@/hooks/useAgentChat";
+import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { getAgent, type AgentId } from "@/lib/agents";
 import { formatCost, formatMs } from "@/lib/format";
 import { Avatar } from "./logos";
@@ -102,11 +103,37 @@ function ChatPane({
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Voice input via the browser's built-in speech recognition.
+  const speech = useSpeechRecognition();
+  const baseRef = useRef("");
+  const finalRef = useRef("");
+
+  const startDictation = () => {
+    baseRef.current = input.trim();
+    finalRef.current = "";
+    speech.start(({ final, interim }) => {
+      if (final) {
+        finalRef.current = `${finalRef.current} ${final.trim()}`.trim();
+      }
+      setInput(
+        [baseRef.current, finalRef.current, interim.trim()]
+          .filter(Boolean)
+          .join(" "),
+      );
+    });
+  };
+
+  const toggleMic = () => {
+    if (speech.listening) speech.stop();
+    else startDictation();
+  };
+
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, typing]);
 
   const submit = () => {
+    if (speech.listening) speech.stop();
     if (!input.trim() || busy) return;
     onSend(input);
     setInput("");
@@ -189,8 +216,14 @@ function ChatPane({
                 }
               }}
               rows={1}
-              placeholder={`Message ${agent.name}…`}
+              placeholder={speech.listening ? "Listening… speak now" : `Message ${agent.name}…`}
               className="max-h-40 flex-1 resize-none bg-transparent px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none"
+            />
+            <MicButton
+              accent={agent.accent}
+              listening={speech.listening}
+              supported={speech.supported}
+              onClick={toggleMic}
             />
             {busy && onStop ? (
               <button
@@ -214,10 +247,19 @@ function ChatPane({
               </button>
             )}
           </div>
-          <p className="mt-2 text-center text-[10px] text-white/25">
-            {agent.live
-              ? "Connected to the Claude Code CLI · responses stream live"
-              : `${agent.name} runs on a local simulated bridge`}
+          <p className="mt-2 flex items-center justify-center gap-1.5 text-center text-[10px] text-white/25">
+            {speech.error ? (
+              <span className="text-ember/80">{speech.error}</span>
+            ) : speech.listening ? (
+              <span className="flex items-center gap-1.5 text-ember">
+                <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-ember" />
+                Listening — click the mic again to stop
+              </span>
+            ) : agent.live ? (
+              "Connected to the Claude Code CLI · responses stream live"
+            ) : (
+              `${agent.name} runs on a local simulated bridge`
+            )}
           </p>
         </div>
       </div>
@@ -314,6 +356,46 @@ function Bubble({ id, msg }: { id: AgentId; msg: ChatMessage }) {
         )}
       </div>
     </motion.div>
+  );
+}
+
+function MicButton({
+  accent,
+  listening,
+  supported,
+  onClick,
+}: {
+  accent: string;
+  listening: boolean;
+  supported: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={!supported}
+      aria-label={listening ? "Stop voice input" : "Start voice input"}
+      title={
+        supported
+          ? listening
+            ? "Stop listening"
+            : "Click to talk"
+          : "Voice input isn't supported in this browser"
+      }
+      className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-transform hover:scale-105 disabled:cursor-not-allowed disabled:opacity-30"
+      style={{
+        background: listening ? "#ff6b9d" : "rgba(255,255,255,0.05)",
+        color: listening ? "#fff" : "rgba(255,255,255,0.6)",
+      }}
+    >
+      {listening && (
+        <span
+          className="absolute inset-0 animate-ping rounded-xl"
+          style={{ background: "#ff6b9d", opacity: 0.4 }}
+        />
+      )}
+      <Mic size={16} className="relative" />
+    </button>
   );
 }
 
