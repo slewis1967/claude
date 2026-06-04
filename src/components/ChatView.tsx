@@ -2,10 +2,12 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowUp, Mic, Plus, Square, Wrench, Zap, Clock } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useClaudeStream, type ChatMessage } from "@/hooks/useClaudeStream";
 import { useAgentChat } from "@/hooks/useAgentChat";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
+import { useVaultAutosave } from "@/hooks/useVaultAutosave";
+import { SavedBadge } from "./SavedBadge";
 import { getAgent, type AgentId } from "@/lib/agents";
 import { formatCost, formatMs } from "@/lib/format";
 import { Avatar } from "./logos";
@@ -139,8 +141,16 @@ function ChatPane({
     setInput("");
   };
 
+  // Auto-save every completed turn into the Obsidian vault.
+  const [savedAt, setSavedAt] = useState(0);
+  useVaultAutosave(
+    messages,
+    busy,
+    agent.name,
+    useCallback(() => setSavedAt(Date.now()), []),
+  );
+
   // For the live agent, an empty thread means "no messages yet".
-  const conversational = messages.filter((m) => m.id !== "greeting");
   const showEmpty = agent.live ? messages.length === 0 : false;
 
   return (
@@ -173,6 +183,7 @@ function ChatPane({
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <SavedBadge trigger={savedAt} />
           {headerExtra}
           <button
             onClick={onReset}

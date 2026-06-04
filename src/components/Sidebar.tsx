@@ -1,11 +1,11 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { LayoutGrid } from "lucide-react";
+import { LayoutGrid, NotebookPen } from "lucide-react";
 import { AGENTS } from "@/lib/agents";
 import { Avatar } from "./logos";
 
-export type Section = "mission" | (typeof AGENTS)[number]["id"];
+export type Section = "mission" | "journal" | (typeof AGENTS)[number]["id"];
 
 interface Props {
   active: Section;
@@ -31,8 +31,8 @@ export default function Sidebar({ active, onSelect, agentStatus }: Props) {
 
       <div className="mx-3 mb-3 h-px bg-white/[0.06] md:mx-4" />
 
-      {/* Overview */}
-      <div className="px-2 md:px-3">
+      {/* Overview + Journal */}
+      <div className="space-y-0.5 px-2 md:px-3">
         <Row
           active={active === "mission"}
           accent="#7c5cff"
@@ -47,6 +47,21 @@ export default function Sidebar({ active, onSelect, agentStatus }: Props) {
           }
           title="Mission Control"
           subtitle="Fleet overview"
+        />
+        <Row
+          active={active === "journal"}
+          accent="#22d3ee"
+          onClick={() => onSelect("journal")}
+          leading={
+            <span
+              className="flex h-10 w-10 items-center justify-center rounded-2xl"
+              style={{ background: "rgba(34,211,238,0.16)", color: "#67e8f9" }}
+            >
+              <NotebookPen size={18} />
+            </span>
+          }
+          title="Journal"
+          subtitle="Goals & daily notes"
         />
       </div>
 

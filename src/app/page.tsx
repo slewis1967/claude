@@ -5,6 +5,7 @@ import { useState } from "react";
 import BootSequence from "@/components/BootSequence";
 import Sidebar, { type Section } from "@/components/Sidebar";
 import MissionControl from "@/components/MissionControl";
+import Journal from "@/components/Journal";
 import ChatView from "@/components/ChatView";
 import { useFleetMetrics } from "@/hooks/useFleetMetrics";
 import { useSystemStats } from "@/hooks/useSystemStats";
@@ -52,6 +53,8 @@ export default function Home() {
                     <MissionControl metrics={metrics} onOpen={setSection} />
                   </div>
                 </div>
+              ) : section === "journal" ? (
+                <Journal />
               ) : (
                 <ChatView id={section as AgentId} />
               )}

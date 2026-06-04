@@ -68,6 +68,31 @@ Browser ──fetch(SSE)──▶ /api/claude ──spawn──▶ claude --prin
 | --- | --- | --- |
 | `CLAUDE_BIN` | `claude` | Path to the Claude Code CLI binary. |
 | `CLAUDE_PERMISSION_MODE` | `dontAsk` | CLI `--permission-mode` so the bridge runs unattended. |
+| `OBSIDIAN_VAULT_PATH` | `/Users/yourname/Documents/ObsidianVault` | Your Obsidian vault. Auto-save lands in its `Agentic OS/` folder. |
+
+## 📝 Obsidian auto-save
+
+Every chat turn, goal, and journal entry is saved into your Obsidian vault as
+**one markdown file per day**, under an `Agentic OS/` folder:
+
+```
+<vault>/Agentic OS/2026-06-04.md
+  ## 🎯 Goals
+  ## 📓 Journal
+  ## 💬 Chat Log
+```
+
+Point it at your real vault before first run:
+
+```bash
+cp .env.example .env.local
+# then edit .env.local:
+OBSIDIAN_VAULT_PATH=/Users/<you>/Documents/ObsidianVault
+```
+
+The **Journal** tab shows live save status, lets you add goals and journal
+entries, and renders today's note. Chats save themselves automatically as each
+reply completes (look for the "Saved to Obsidian" flash in the chat header).
 
 ## 🛰 Adding a real bridge for another agent
 
