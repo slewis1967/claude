@@ -1,4 +1,4 @@
-import { promises as fs } from "node:fs";
+import { promises as fs, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
@@ -9,6 +9,12 @@ import os from "node:os";
 
 const SUBFOLDER = "Agentic OS";
 const DEFAULT_VAULT = "/Users/yourname/Documents/ObsidianVault";
+
+// Where the runtime-configured vault path is persisted (set from the UI).
+// Takes precedence over the OBSIDIAN_VAULT_PATH env var.
+function configFile(): string {
+  return path.join(process.cwd(), ".agentic-os.json");
+}
 
 export type EntryType = "chat" | "goal" | "journal";
 
@@ -25,8 +31,28 @@ function expandHome(p: string): string {
   return p;
 }
 
+function configuredPath(): string | null {
+  try {
+    const raw = readFileSync(configFile(), "utf8");
+    const data = JSON.parse(raw);
+    if (typeof data?.vaultPath === "string" && data.vaultPath.trim()) {
+      return data.vaultPath.trim();
+    }
+  } catch {
+    /* no config yet */
+  }
+  return null;
+}
+
+/** Persist the vault path chosen in the UI. */
+export function setVaultPath(p: string): void {
+  writeFileSync(configFile(), JSON.stringify({ vaultPath: p.trim() }, null, 2));
+}
+
 export function vaultRoot(): string {
-  return expandHome(process.env.OBSIDIAN_VAULT_PATH || DEFAULT_VAULT);
+  return expandHome(
+    configuredPath() || process.env.OBSIDIAN_VAULT_PATH || DEFAULT_VAULT,
+  );
 }
 
 export function folderPath(): string {
@@ -35,7 +61,8 @@ export function folderPath(): string {
 
 /** True while the path still points at the literal placeholder username. */
 export function isPlaceholder(): boolean {
-  return vaultRoot().includes("/yourname/");
+  const r = vaultRoot();
+  return r.includes("/yourname/") || r.includes("\\yourname\\");
 }
 
 function pad(n: number) {

@@ -26,3 +26,6 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
+
+# runtime-configured vault path (set from the UI)
+.agentic-os.json
