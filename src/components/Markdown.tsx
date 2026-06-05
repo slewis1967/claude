@@ -51,6 +51,9 @@ export function Markdown({ source }: { source: string }) {
 
   lines.forEach((line, idx) => {
     const key = `l${idx}`;
+    if (line.trim().startsWith("<!--")) {
+      return; // skip HTML comments (e.g. the carry-over marker)
+    }
     if (line.startsWith("# ")) {
       nodes.push(
         <h1 key={key} className="mb-3 mt-1 text-xl font-bold text-white">

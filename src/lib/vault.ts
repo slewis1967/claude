@@ -17,6 +17,7 @@ function configFile(): string {
 }
 
 export type EntryType = "chat" | "goal" | "journal";
+export type Priority = "high" | "medium" | "low";
 
 export interface VaultEntry {
   type: EntryType;
@@ -24,7 +25,16 @@ export interface VaultEntry {
   agent?: string; // chat: agent name
   user?: string; // chat: user message
   assistant?: string; // chat: agent reply
+  priority?: Priority; // goal: optional priority
+  due?: string; // goal: optional YYYY-MM-DD due date
 }
+
+// Obsidian Tasks-plugin compatible priority emoji.
+const PRIORITY_EMOJI: Record<Priority, string> = {
+  high: "⏫",
+  medium: "🔼",
+  low: "🔽",
+};
 
 function expandHome(p: string): string {
   if (p.startsWith("~")) return path.join(os.homedir(), p.slice(1));
@@ -118,11 +128,18 @@ function escape(s: string): string {
 function renderEntry(entry: VaultEntry): { header: string; block: string } {
   const t = clock();
   switch (entry.type) {
-    case "goal":
+    case "goal": {
+      const meta: string[] = [];
+      if (entry.priority) meta.push(PRIORITY_EMOJI[entry.priority]);
+      if (entry.due && /^\d{4}-\d{2}-\d{2}$/.test(entry.due)) {
+        meta.push(`📅 ${entry.due}`);
+      }
+      const tail = meta.length ? ` ${meta.join(" ")}` : "";
       return {
         header: "## 🎯 Goals",
-        block: `- [ ] ${escape(entry.text ?? "")}  _(${t})_\n`,
+        block: `- [ ] ${escape(entry.text ?? "")}${tail}  _(${t})_\n`,
       };
+    }
     case "journal":
       return {
         header: "## 📓 Journal",
@@ -187,6 +204,7 @@ export async function appendEntry(entry: VaultEntry): Promise<SaveResult> {
   return enqueue(async () => {
     try {
       await fs.mkdir(folderPath(), { recursive: true });
+      await ensureTodayUnqueued();
       const file = dailyFile();
       let content: string;
       try {
@@ -246,6 +264,175 @@ export async function setGoalChecked(
   });
 }
 
+/* ---------- Carry-over of unfinished tasks ---------- */
+
+const CARRY_MARKER = "<!-- carried -->";
+
+async function listDailyKeys(): Promise<string[]> {
+  try {
+    const names = await fs.readdir(folderPath());
+    return names
+      .filter((n) => /^\d{4}-\d{2}-\d{2}\.md$/.test(n))
+      .map((n) => n.replace(/\.md$/, ""))
+      .sort();
+  } catch {
+    return [];
+  }
+}
+
+function goalLines(md: string, onlyUnchecked = false): string[] {
+  const lines = md.split("\n");
+  const start = lines.findIndex((l) => l.trim() === "## 🎯 Goals");
+  if (start === -1) return [];
+  const out: string[] = [];
+  for (let i = start + 1; i < lines.length; i++) {
+    if (lines[i].startsWith("## ")) break;
+    const m = lines[i].match(onlyUnchecked ? /^- \[ \] (.*)$/ : /^- \[[ xX]\] (.*)$/);
+    if (m) out.push(m[1]);
+  }
+  return out;
+}
+
+function stripCreationTime(s: string): string {
+  return s.replace(/\s*_\([^)]*\)_\s*$/, "").trim();
+}
+
+/** Normalized goal text (no priority/due/time meta) for de-duplication. */
+function goalKey(content: string): string {
+  return stripCreationTime(content)
+    .replace(/[⏫🔼🔽]/g, "")
+    .replace(/📅\s*\d{4}-\d{2}-\d{2}/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function withMarker(content: string): string {
+  if (content.includes(CARRY_MARKER)) return content;
+  const lines = content.split("\n");
+  const start = lines.findIndex((l) => l.trim() === "## 🎯 Goals");
+  if (start === -1) return content;
+  lines.splice(start + 1, 0, CARRY_MARKER);
+  return lines.join("\n");
+}
+
+// Rolls unchecked goals from the most recent previous day into today, once.
+// Idempotent via CARRY_MARKER. Does not create an empty note just from viewing.
+async function ensureTodayUnqueued(): Promise<void> {
+  if (isPlaceholder()) return;
+  const file = dailyFile();
+  let content: string | null = null;
+  try {
+    content = await fs.readFile(file, "utf8");
+  } catch {
+    content = null;
+  }
+  if (content && content.includes(CARRY_MARKER)) return;
+
+  const today = dateKey();
+  const prev = (await listDailyKeys()).filter((d) => d < today).reverse();
+  let carried: string[] = [];
+  for (const d of prev) {
+    const md = await fs
+      .readFile(path.join(folderPath(), `${d}.md`), "utf8")
+      .catch(() => "");
+    const u = goalLines(md, true);
+    if (u.length) {
+      carried = u;
+      break;
+    }
+  }
+
+  // Don't materialize an empty file just because the page was opened.
+  if (content === null && carried.length === 0) return;
+
+  let base = withMarker(content ?? scaffold());
+  const seen = new Set(goalLines(base).map(goalKey));
+  for (const c of carried) {
+    const key = goalKey(c);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    base = insertIntoSection(
+      base,
+      "## 🎯 Goals",
+      `- [ ] ${stripCreationTime(c)}  _(carried)_\n`,
+    );
+  }
+  base = base.replace(/\n{3,}/g, "\n\n").replace(/\s*$/, "\n");
+  await fs.mkdir(folderPath(), { recursive: true });
+  await fs.writeFile(file, base, "utf8");
+}
+
+/* ---------- Calendar / streak ---------- */
+
+export interface DaySummary {
+  date: string;
+  goals: number;
+  goalsDone: number;
+  journal: number;
+  chats: number;
+}
+
+function sectionLines(md: string, header: string): string[] {
+  const lines = md.split("\n");
+  const start = lines.findIndex((l) => l.trim() === header);
+  if (start === -1) return [];
+  const out: string[] = [];
+  for (let i = start + 1; i < lines.length; i++) {
+    if (lines[i].startsWith("## ")) break;
+    out.push(lines[i]);
+  }
+  return out;
+}
+
+function summarize(date: string, md: string): DaySummary {
+  const goals = goalLines(md);
+  const goalsDone = md
+    .split("\n")
+    .filter((l) => /^- \[[xX]\] /.test(l)).length;
+  const journal = sectionLines(md, "## 📓 Journal").filter((l) =>
+    /^### \d{2}:\d{2}\b/.test(l),
+  ).length;
+  const chats = sectionLines(md, "## 💬 Chat Log").filter((l) =>
+    /^### /.test(l),
+  ).length;
+  return { date, goals: goals.length, goalsDone, journal, chats };
+}
+
+function computeStreak(days: DaySummary[]): number {
+  const active = new Set(
+    days.filter((d) => d.goals + d.journal + d.chats > 0).map((d) => d.date),
+  );
+  const d = new Date();
+  if (!active.has(dateKey(d))) d.setDate(d.getDate() - 1);
+  let streak = 0;
+  while (active.has(dateKey(d))) {
+    streak++;
+    d.setDate(d.getDate() - 1);
+  }
+  return streak;
+}
+
+export async function listDays(): Promise<{ days: DaySummary[]; streak: number }> {
+  if (isPlaceholder()) return { days: [], streak: 0 };
+  const keys = await listDailyKeys();
+  const days: DaySummary[] = [];
+  for (const k of keys) {
+    const md = await fs
+      .readFile(path.join(folderPath(), `${k}.md`), "utf8")
+      .catch(() => "");
+    if (md) days.push(summarize(k, md));
+  }
+  return { days, streak: computeStreak(days) };
+}
+
+export async function readDay(date: string): Promise<string> {
+  if (isPlaceholder() || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return "";
+  return fs
+    .readFile(path.join(folderPath(), `${date}.md`), "utf8")
+    .catch(() => "");
+}
+
 export interface VaultStatus {
   configured: boolean;
   vaultRoot: string;
@@ -281,6 +468,8 @@ export async function readStatus(): Promise<VaultStatus> {
     } catch {
       writable = false;
     }
+    // Roll yesterday's unfinished tasks into today (idempotent), then read.
+    await enqueue(() => ensureTodayUnqueued().catch(() => {}));
     try {
       todayMarkdown = await fs.readFile(file, "utf8");
     } catch {
