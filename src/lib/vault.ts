@@ -210,6 +210,42 @@ export async function appendEntry(entry: VaultEntry): Promise<SaveResult> {
   });
 }
 
+/** Toggle the Nth checkbox in today's Goals section. */
+export async function setGoalChecked(
+  index: number,
+  done: boolean,
+): Promise<SaveResult> {
+  if (isPlaceholder()) {
+    return { ok: false, error: "Vault path is unset." };
+  }
+  return enqueue(async () => {
+    try {
+      const file = dailyFile();
+      const content = await fs.readFile(file, "utf8");
+      const lines = content.split("\n");
+      const start = lines.findIndex((l) => l.trim() === "## 🎯 Goals");
+      if (start === -1) return { ok: false, error: "No goals section." };
+
+      let count = -1;
+      for (let i = start + 1; i < lines.length; i++) {
+        if (lines[i].startsWith("## ")) break;
+        const m = lines[i].match(/^- \[[ xX]\] (.*)$/);
+        if (m) {
+          count++;
+          if (count === index) {
+            lines[i] = `- [${done ? "x" : " "}] ${m[1]}`;
+            await fs.writeFile(file, lines.join("\n"), "utf8");
+            return { ok: true, file };
+          }
+        }
+      }
+      return { ok: false, error: "Goal not found." };
+    } catch (e: any) {
+      return { ok: false, error: e?.message ?? "write failed" };
+    }
+  });
+}
+
 export interface VaultStatus {
   configured: boolean;
   vaultRoot: string;

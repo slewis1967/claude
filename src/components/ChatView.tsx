@@ -1,12 +1,13 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowUp, Mic, Plus, Square, Wrench, Zap, Clock } from "lucide-react";
+import { ArrowUp, Plus, Square, Wrench, Zap, Clock } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useClaudeStream, type ChatMessage } from "@/hooks/useClaudeStream";
 import { useAgentChat } from "@/hooks/useAgentChat";
-import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
+import { useDictation } from "@/hooks/useDictation";
 import { useVaultAutosave } from "@/hooks/useVaultAutosave";
+import { MicButton } from "./MicButton";
 import { SavedBadge } from "./SavedBadge";
 import { getAgent, type AgentId } from "@/lib/agents";
 import { formatCost, formatMs } from "@/lib/format";
@@ -106,29 +107,7 @@ function ChatPane({
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Voice input via the browser's built-in speech recognition.
-  const speech = useSpeechRecognition();
-  const baseRef = useRef("");
-  const finalRef = useRef("");
-
-  const startDictation = () => {
-    baseRef.current = input.trim();
-    finalRef.current = "";
-    speech.start(({ final, interim }) => {
-      if (final) {
-        finalRef.current = `${finalRef.current} ${final.trim()}`.trim();
-      }
-      setInput(
-        [baseRef.current, finalRef.current, interim.trim()]
-          .filter(Boolean)
-          .join(" "),
-      );
-    });
-  };
-
-  const toggleMic = () => {
-    if (speech.listening) speech.stop();
-    else startDictation();
-  };
+  const speech = useDictation(input, setInput);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -231,10 +210,9 @@ function ChatPane({
               className="max-h-40 flex-1 resize-none bg-transparent px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none"
             />
             <MicButton
-              accent={agent.accent}
               listening={speech.listening}
               supported={speech.supported}
-              onClick={toggleMic}
+              onClick={speech.toggle}
             />
             {busy && onStop ? (
               <button
@@ -367,46 +345,6 @@ function Bubble({ id, msg }: { id: AgentId; msg: ChatMessage }) {
         )}
       </div>
     </motion.div>
-  );
-}
-
-function MicButton({
-  accent,
-  listening,
-  supported,
-  onClick,
-}: {
-  accent: string;
-  listening: boolean;
-  supported: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={!supported}
-      aria-label={listening ? "Stop voice input" : "Start voice input"}
-      title={
-        supported
-          ? listening
-            ? "Stop listening"
-            : "Click to talk"
-          : "Voice input isn't supported in this browser"
-      }
-      className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-transform hover:scale-105 disabled:cursor-not-allowed disabled:opacity-30"
-      style={{
-        background: listening ? "#ff6b9d" : "rgba(255,255,255,0.05)",
-        color: listening ? "#fff" : "rgba(255,255,255,0.6)",
-      }}
-    >
-      {listening && (
-        <span
-          className="absolute inset-0 animate-ping rounded-xl"
-          style={{ background: "#ff6b9d", opacity: 0.4 }}
-        />
-      )}
-      <Mic size={16} className="relative" />
-    </button>
   );
 }
 

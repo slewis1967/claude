@@ -1,11 +1,15 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { LayoutGrid, NotebookPen } from "lucide-react";
+import { LayoutGrid, NotebookPen, ListChecks } from "lucide-react";
 import { AGENTS } from "@/lib/agents";
 import { Avatar } from "./logos";
 
-export type Section = "mission" | "journal" | (typeof AGENTS)[number]["id"];
+export type Section =
+  | "mission"
+  | "goals"
+  | "journal"
+  | (typeof AGENTS)[number]["id"];
 
 interface Props {
   active: Section;
@@ -49,6 +53,21 @@ export default function Sidebar({ active, onSelect, agentStatus }: Props) {
           subtitle="Fleet overview"
         />
         <Row
+          active={active === "goals"}
+          accent="#9eff5a"
+          onClick={() => onSelect("goals")}
+          leading={
+            <span
+              className="flex h-10 w-10 items-center justify-center rounded-2xl"
+              style={{ background: "rgba(158,255,90,0.16)", color: "#c4ff9e" }}
+            >
+              <ListChecks size={18} />
+            </span>
+          }
+          title="Goals"
+          subtitle="Checkbox tasks"
+        />
+        <Row
           active={active === "journal"}
           accent="#22d3ee"
           onClick={() => onSelect("journal")}
@@ -61,7 +80,7 @@ export default function Sidebar({ active, onSelect, agentStatus }: Props) {
             </span>
           }
           title="Journal"
-          subtitle="Goals & daily notes"
+          subtitle="One note per day"
         />
       </div>
 
