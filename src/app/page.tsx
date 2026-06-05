@@ -39,30 +39,30 @@ export default function Home() {
         <Sidebar active={section} onSelect={setSection} agentStatus={agentStatus} />
 
         <main className="relative min-w-0 flex-1 overflow-hidden">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={section}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.25, ease: "easeOut" }}
-              className="h-full"
-            >
-              {section === "mission" ? (
-                <div className="h-full overflow-y-auto">
-                  <div className="mx-auto max-w-[1400px] px-5 py-7 lg:px-9">
-                    <MissionControl metrics={metrics} onOpen={setSection} />
-                  </div>
+          {/* Keyed by section with an enter-only animation. No AnimatePresence
+              "wait" here — exit animations could strand the view on the old
+              page when switching quickly, which looked like pages "not loading". */}
+          <motion.div
+            key={section}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
+            className="h-full"
+          >
+            {section === "mission" ? (
+              <div className="h-full overflow-y-auto">
+                <div className="mx-auto max-w-[1400px] px-5 py-7 lg:px-9">
+                  <MissionControl metrics={metrics} onOpen={setSection} />
                 </div>
-              ) : section === "goals" ? (
-                <Goals />
-              ) : section === "journal" ? (
-                <Journal />
-              ) : (
-                <ChatView id={section as AgentId} />
-              )}
-            </motion.div>
-          </AnimatePresence>
+              </div>
+            ) : section === "goals" ? (
+              <Goals />
+            ) : section === "journal" ? (
+              <Journal />
+            ) : (
+              <ChatView id={section as AgentId} />
+            )}
+          </motion.div>
         </main>
       </motion.div>
     </>
