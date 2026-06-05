@@ -33,6 +33,16 @@ const CLAUDE_BIN = process.env.CLAUDE_BIN || "claude";
 // "dontAsk" lets the bridge run unattended without hanging on tool prompts.
 const PERMISSION_MODE = process.env.CLAUDE_PERMISSION_MODE || "dontAsk";
 
+// On Windows the CLI is a `claude.cmd` shim, which Node's spawn can't launch
+// directly — it needs a shell to resolve it. We only ever pass fixed/validated
+// flags through the shell (the user's prompt goes via stdin), so this is safe.
+const IS_WIN = process.platform === "win32";
+
+/** Allow only safe characters for values that may pass through a shell. */
+function safeArg(v: string | undefined, re: RegExp): string | undefined {
+  return v && re.test(v) ? v : undefined;
+}
+
 /**
  * Spawns the CLI and yields normalized bridge events as an async generator.
  */
@@ -49,14 +59,23 @@ export async function* runClaude(
     PERMISSION_MODE,
   ];
 
-  if (opts.model) args.push("--model", opts.model);
-  if (opts.sessionId) args.push("--resume", opts.sessionId);
-  args.push(opts.prompt);
+  const model = safeArg(opts.model, /^[a-zA-Z0-9._-]+$/);
+  const session = safeArg(opts.sessionId, /^[a-zA-Z0-9-]+$/);
+  if (model) args.push("--model", model);
+  if (session) args.push("--resume", session);
+  // The prompt is written to stdin (never the argv/shell) to avoid any quoting
+  // or injection issues and to work identically across platforms.
 
   const child = spawn(CLAUDE_BIN, args, {
     env: process.env,
-    stdio: ["ignore", "pipe", "pipe"],
+    stdio: ["pipe", "pipe", "pipe"],
+    shell: IS_WIN,
   });
+
+  // Feed the prompt over stdin, then close it so the CLI runs the single turn.
+  child.stdin?.on("error", () => {});
+  child.stdin?.write(opts.prompt);
+  child.stdin?.end();
 
   const abort = () => child.kill("SIGTERM");
   opts.signal?.addEventListener("abort", abort);
@@ -126,9 +145,12 @@ export async function* runClaude(
         yield queue.shift()!;
       }
       if (spawnError) {
+        const enoent = /ENOENT/.test(spawnError);
         yield {
           type: "error",
-          message: `Failed to launch Claude CLI: ${spawnError}`,
+          message: enoent
+            ? "Claude Code CLI not found. Install it with `npm install -g @anthropic-ai/claude-code`, then run `claude` once to sign in. (Set CLAUDE_BIN to its full path if it lives elsewhere.)"
+            : `Failed to launch Claude CLI: ${spawnError}`,
         };
         break;
       }
@@ -204,7 +226,10 @@ function parseCliLine(line: string): BridgeEvent | null {
 /** Returns the installed CLI version string, or null if unavailable. */
 export async function getClaudeVersion(): Promise<string | null> {
   return new Promise((resolve) => {
-    const child = spawn(CLAUDE_BIN, ["--version"], { stdio: ["ignore", "pipe", "ignore"] });
+    const child = spawn(CLAUDE_BIN, ["--version"], {
+      stdio: ["ignore", "pipe", "ignore"],
+      shell: IS_WIN,
+    });
     let out = "";
     child.stdout.on("data", (d) => (out += d.toString()));
     child.on("error", () => resolve(null));
