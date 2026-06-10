@@ -1,6 +1,7 @@
-import { promises as fs, readFileSync, writeFileSync } from "node:fs";
+import { promises as fs } from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { readConfig, writeConfig } from "./config";
 
 // Server-side writer for your Obsidian vault. Everything the OS produces —
 // chats, goals, journal entries — is appended into one markdown file per day
@@ -9,12 +10,6 @@ import os from "node:os";
 
 const SUBFOLDER = "Agentic OS";
 const DEFAULT_VAULT = "/Users/yourname/Documents/ObsidianVault";
-
-// Where the runtime-configured vault path is persisted (set from the UI).
-// Takes precedence over the OBSIDIAN_VAULT_PATH env var.
-function configFile(): string {
-  return path.join(process.cwd(), ".agentic-os.json");
-}
 
 export type EntryType = "chat" | "goal" | "journal";
 export type Priority = "high" | "medium" | "low";
@@ -42,21 +37,13 @@ function expandHome(p: string): string {
 }
 
 function configuredPath(): string | null {
-  try {
-    const raw = readFileSync(configFile(), "utf8");
-    const data = JSON.parse(raw);
-    if (typeof data?.vaultPath === "string" && data.vaultPath.trim()) {
-      return data.vaultPath.trim();
-    }
-  } catch {
-    /* no config yet */
-  }
-  return null;
+  const v = readConfig().vaultPath;
+  return typeof v === "string" && v.trim() ? v.trim() : null;
 }
 
-/** Persist the vault path chosen in the UI. */
+/** Persist the vault path chosen in the UI (merges with other settings). */
 export function setVaultPath(p: string): void {
-  writeFileSync(configFile(), JSON.stringify({ vaultPath: p.trim() }, null, 2));
+  writeConfig({ vaultPath: p.trim() });
 }
 
 export function vaultRoot(): string {

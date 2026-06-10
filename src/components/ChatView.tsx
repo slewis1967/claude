@@ -1,21 +1,100 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowUp, Plus, Square, Wrench, Zap, Clock } from "lucide-react";
+import { ArrowUp, Plug, Plus, Square, Wrench, Zap, Clock } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useClaudeStream, type ChatMessage } from "@/hooks/useClaudeStream";
 import { useAgentChat } from "@/hooks/useAgentChat";
+import { useRealAgentChat } from "@/hooks/useRealAgentChat";
 import { useDictation } from "@/hooks/useDictation";
 import { useVaultAutosave } from "@/hooks/useVaultAutosave";
 import { MicButton } from "./MicButton";
 import { SavedBadge } from "./SavedBadge";
+import { AgentConnect, type AgentConn } from "./AgentConnect";
 import { getAgent, type AgentId } from "@/lib/agents";
 import { formatCost, formatMs } from "@/lib/format";
 import { Avatar } from "./logos";
 
 export default function ChatView({ id }: { id: AgentId }) {
   const agent = getAgent(id)!;
-  return agent.live ? <LiveChat id={id} /> : <SimChat id={id} />;
+  // Claude is the built-in live bridge; every other agent is configurable.
+  return agent.live ? <LiveChat id={id} /> : <ConfigurableAgentChat id={id} />;
+}
+
+/* ---------- Configurable agents (simulated until a backend is connected) ---------- */
+
+function ConfigurableAgentChat({ id }: { id: AgentId }) {
+  const agent = getAgent(id)!;
+  const [conn, setConn] = useState<AgentConn | null | undefined>(undefined); // undefined = loading
+  const [showConnect, setShowConnect] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    fetch(`/api/agent/config?id=${id}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => active && setConn(d.config ?? null))
+      .catch(() => active && setConn(null));
+    return () => {
+      active = false;
+    };
+  }, [id]);
+
+  const live = !!conn?.live && !!conn?.command;
+
+  const connectButton = (
+    <button
+      onClick={() => setShowConnect((s) => !s)}
+      className="flex h-9 items-center gap-1.5 rounded-xl border px-3 text-xs font-medium transition-colors"
+      style={{
+        borderColor: live ? `${agent.accent}55` : "rgba(255,255,255,0.1)",
+        background: live ? `${agent.accent}1a` : "rgba(255,255,255,0.03)",
+        color: live ? agent.accent : "rgba(255,255,255,0.55)",
+      }}
+      title={live ? "Edit backend connection" : "Connect a real backend"}
+    >
+      <Plug size={14} />
+      <span className="hidden sm:inline">{live ? "Connected" : "Connect"}</span>
+    </button>
+  );
+
+  return (
+    <div className="flex h-full flex-col">
+      <AnimatePresence>
+        {showConnect && (
+          <AgentConnect
+            agent={agent}
+            current={conn ?? null}
+            onClose={() => setShowConnect(false)}
+            onSaved={(c) => setConn(c)}
+          />
+        )}
+      </AnimatePresence>
+      <div className="min-h-0 flex-1">
+        {live ? (
+          <RealAgentChat id={id} headerExtra={connectButton} />
+        ) : (
+          <SimChat id={id} headerExtra={connectButton} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RealAgentChat({ id, headerExtra }: { id: AgentId; headerExtra?: React.ReactNode }) {
+  const { messages, busy, send, stop, reset } = useRealAgentChat(id);
+  return (
+    <ChatPane
+      id={id}
+      messages={messages}
+      busy={busy}
+      typing={false}
+      onSend={send}
+      onStop={stop}
+      onReset={reset}
+      headerExtra={headerExtra}
+      headerStatusOverride="connected backend"
+    />
+  );
 }
 
 /* ---------- Containers (own the hooks) ---------- */
@@ -65,7 +144,7 @@ function LiveChat({ id }: { id: AgentId }) {
   );
 }
 
-function SimChat({ id }: { id: AgentId }) {
+function SimChat({ id, headerExtra }: { id: AgentId; headerExtra?: React.ReactNode }) {
   const { messages, busy, typing, send, reset } = useAgentChat(id);
   return (
     <ChatPane
@@ -75,6 +154,7 @@ function SimChat({ id }: { id: AgentId }) {
       typing={typing}
       onSend={send}
       onReset={reset}
+      headerExtra={headerExtra}
     />
   );
 }
