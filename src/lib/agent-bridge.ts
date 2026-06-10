@@ -11,7 +11,110 @@ export type AgentEvent =
   | { type: "done" }
   | { type: "error"; message: string };
 
+export interface ChatTurn {
+  role: "user" | "assistant" | "system";
+  content: string;
+}
+
 const IS_WIN = process.platform === "win32";
+
+/**
+ * Streams a reply from an OpenAI-compatible chat endpoint (Hermes' API server,
+ * Ollama, LM Studio, etc.). Yields text deltas as they arrive.
+ */
+async function* runHttpAgent(
+  id: string,
+  cfg: { baseUrl?: string; model?: string; apiKey?: string },
+  messages: ChatTurn[],
+  signal?: AbortSignal,
+): AsyncGenerator<AgentEvent> {
+  const base = (cfg.baseUrl ?? "").trim().replace(/\/+$/, "");
+  if (!base) {
+    yield { type: "error", message: `${id} has no endpoint URL configured.` };
+    return;
+  }
+  const url = /\/chat\/completions$/.test(base) ? base : `${base}/chat/completions`;
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(cfg.apiKey ? { Authorization: `Bearer ${cfg.apiKey}` } : {}),
+      },
+      body: JSON.stringify({
+        model: cfg.model || "default",
+        messages,
+        stream: true,
+      }),
+      signal,
+    });
+  } catch (e: any) {
+    yield {
+      type: "error",
+      message: `Couldn't reach ${id} at ${url}. Is its API server running and reachable? (${e?.message ?? "fetch failed"})`,
+    };
+    return;
+  }
+
+  if (!res.ok || !res.body) {
+    const detail = await res.text().catch(() => "");
+    yield {
+      type: "error",
+      message: `${id} endpoint returned ${res.status}. ${detail.slice(0, 200)}`.trim(),
+    };
+    return;
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let any = false;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let nl: number;
+      while ((nl = buffer.indexOf("\n")) !== -1) {
+        const line = buffer.slice(0, nl).trim();
+        buffer = buffer.slice(nl + 1);
+        if (!line.startsWith("data:")) continue;
+        const payload = line.slice(5).trim();
+        if (!payload || payload === "[DONE]") continue;
+        try {
+          const json = JSON.parse(payload);
+          const delta =
+            json.choices?.[0]?.delta?.content ??
+            json.choices?.[0]?.message?.content ??
+            "";
+          if (delta) {
+            any = true;
+            yield { type: "delta", text: delta };
+          }
+        } catch {
+          /* ignore keep-alive / partial lines */
+        }
+      }
+    }
+  } catch (e: any) {
+    if (e?.name !== "AbortError") {
+      yield { type: "error", message: `Stream error from ${id}: ${e?.message ?? "unknown"}` };
+      return;
+    }
+  }
+
+  if (!any) {
+    yield {
+      type: "error",
+      message: `${id} returned no content. Check the model name ("${cfg.model}") is correct for this endpoint.`,
+    };
+    return;
+  }
+  yield { type: "done" };
+}
 
 function singleQuote(s: string): string {
   // POSIX-safe single quoting for embedding in a bash -lc string.
@@ -47,10 +150,27 @@ export async function* runAgent(
   id: string,
   prompt: string,
   signal?: AbortSignal,
+  history?: ChatTurn[],
 ): AsyncGenerator<AgentEvent> {
   const cfg = getAgentConfig(id);
-  if (!cfg?.live || !cfg.command?.trim()) {
+  if (!cfg?.live) {
     yield { type: "error", message: `${id} has no connected backend.` };
+    return;
+  }
+
+  // HTTP / OpenAI-compatible endpoint (the right path for TUI agents like
+  // Hermes, which expose an API server).
+  if (cfg.runtime === "openai") {
+    const messages: ChatTurn[] =
+      history && history.length
+        ? history
+        : [{ role: "user", content: prompt }];
+    yield* runHttpAgent(id, cfg, messages, signal);
+    return;
+  }
+
+  if (!cfg.command?.trim()) {
+    yield { type: "error", message: `${id} has no command configured.` };
     return;
   }
 

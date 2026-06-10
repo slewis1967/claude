@@ -39,7 +39,9 @@ function ConfigurableAgentChat({ id }: { id: AgentId }) {
     };
   }, [id]);
 
-  const live = !!conn?.live && !!conn?.command;
+  const live =
+    !!conn?.live &&
+    (conn?.runtime === "openai" ? !!conn?.baseUrl : !!conn?.command);
 
   const connectButton = (
     <button

@@ -17,6 +17,8 @@ export function useRealAgentChat(id: AgentId) {
   ]);
   const [busy, setBusy] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const messagesRef = useRef<ChatMessage[]>([]);
+  messagesRef.current = messages;
 
   const stop = useCallback(() => abortRef.current?.abort(), []);
   const reset = useCallback(() => {
@@ -36,6 +38,13 @@ export function useRealAgentChat(id: AgentId) {
       const text = prompt.trim();
       if (!text || busy) return;
 
+      // Conversation history for multi-turn HTTP backends (drop the greeting
+      // and any empty/streaming placeholders).
+      const history = messagesRef.current
+        .filter((m) => m.id !== "greeting" && m.content.trim())
+        .map((m) => ({ role: m.role, content: m.content }));
+      history.push({ role: "user" as const, content: text });
+
       const assistantId = crypto.randomUUID();
       setMessages((m) => [
         ...m,
@@ -54,7 +63,7 @@ export function useRealAgentChat(id: AgentId) {
         const res = await fetch("/api/agent/run", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id, prompt: text }),
+          body: JSON.stringify({ id, prompt: text, messages: history }),
           signal: controller.signal,
         });
         if (!res.ok || !res.body) throw new Error(`Bridge responded ${res.status}`);

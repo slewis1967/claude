@@ -7,7 +7,7 @@ import { getAgentConfig, setAgentConfig, type AgentRuntime } from "@/lib/config"
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const RUNTIMES: AgentRuntime[] = ["wsl", "windows", "direct"];
+const RUNTIMES: AgentRuntime[] = ["openai", "wsl", "windows", "direct"];
 
 export async function GET(req: NextRequest) {
   const id = req.nextUrl.searchParams.get("id") ?? "";
@@ -25,6 +25,9 @@ export async function POST(req: NextRequest) {
     command?: string;
     cwd?: string;
     args?: string[];
+    baseUrl?: string;
+    model?: string;
+    apiKey?: string;
   };
   try {
     body = await req.json();
@@ -45,6 +48,9 @@ export async function POST(req: NextRequest) {
     command: (body.command ?? "").toString().trim(),
     cwd: (body.cwd ?? "").toString().trim(),
     args: Array.isArray(body.args) ? body.args.map(String) : [],
+    baseUrl: (body.baseUrl ?? "").toString().trim(),
+    model: (body.model ?? "").toString().trim(),
+    apiKey: (body.apiKey ?? "").toString().trim(),
   });
 
   return Response.json(

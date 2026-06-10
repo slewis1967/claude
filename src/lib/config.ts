@@ -5,14 +5,20 @@ import path from "node:path";
 // project root). Holds the Obsidian vault path and any real-agent backends the
 // user has connected. All writers merge so settings never clobber each other.
 
-export type AgentRuntime = "wsl" | "windows" | "direct";
+export type AgentRuntime = "openai" | "wsl" | "windows" | "direct";
 
 export interface AgentConfig {
   live?: boolean;
   runtime?: AgentRuntime;
+  // Spawn runtimes (wsl / windows / direct):
   command?: string;
   cwd?: string;
   args?: string[];
+  // HTTP runtime (openai): an OpenAI-compatible endpoint, e.g. Hermes' API
+  // server or Ollama.
+  baseUrl?: string;
+  model?: string;
+  apiKey?: string;
 }
 
 export interface AppConfig {
